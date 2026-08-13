@@ -1,0 +1,17 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.FSApp" parent="android:Theme.Material.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="android:colorPrimary">@color/mint</item>
+        <item name="android:colorPrimaryDark">@color/charcoal_dark</item>
+        <item name="android:statusBarColor">@color/charcoal_bg</item>
+        <item name="android:navigationBarColor">@color/charcoal_bg</item>
+        <item name="android:windowBackground">@color/charcoal_bg</item>
+        <!-- Customize your theme here. -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.FSApp.Splash" parent="Theme.FSApp">
+        <item name="android:windowBackground">@color/charcoal_bg</item>
+    </style>
+</resources>
