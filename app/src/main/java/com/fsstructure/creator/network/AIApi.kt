@@ -23,8 +23,6 @@ class AIApi {
 
     companion object {
         private const val API_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-        
-        // Using exactly the model you requested
         private const val MODEL = "gemini-3.5-flash"
 
         private val SYSTEM_PROMPT = """
@@ -59,7 +57,6 @@ class AIApi {
     ): AIResponse {
         return withContext(Dispatchers.IO) {
             val jsonBody = buildJsonBody(messages, errorContext)
-
             val urlWithKey = "${API_URL}$MODEL:generateContent?key=$apiKey"
 
             val request = Request.Builder()
@@ -124,23 +121,45 @@ class AIApi {
             .getJSONArray("parts")
             .getJSONObject(0)
             .getString("text")
+            .trim()
 
-        val aiJson = JSONObject(contentStr.trim())
+        // Clean potential markdown wrappers
+        var jsonString = contentStr
+        if (jsonString.startsWith("```json")) {
+            jsonString = jsonString.substring(7)
+        } else if (jsonString.startsWith("```")) {
+            jsonString = jsonString.substring(3)
+        }
+        if (jsonString.endsWith("```")) {
+            jsonString = jsonString.dropLast(3)
+        }
+        jsonString = jsonString.trim()
 
-        val message = aiJson.optString("message", "")
         val operations = mutableListOf<FsOperation>()
+        val message: String
 
-        val opsArray = aiJson.optJSONArray("operations")
-        if (opsArray != null) {
-            for (i in 0 until opsArray.length()) {
-                val op = opsArray.getJSONObject(i)
-                val type = op.getString("type")
-                val path = op.getString("path")
-                when (type) {
-                    "CreateDirectory" -> operations.add(FsOperation.CreateDirectory(path))
-                    "CreateEmptyFile" -> operations.add(FsOperation.CreateEmptyFile(path))
+        try {
+            // Attempt strict JSON parsing
+            val aiJson = JSONObject(jsonString)
+            message = aiJson.optString("message", "")
+
+            val opsArray = aiJson.optJSONArray("operations")
+            if (opsArray != null) {
+                for (i in 0 until opsArray.length()) {
+                    val op = opsArray.getJSONObject(i)
+                    val type = op.getString("type")
+                    val path = op.getString("path")
+                    when (type) {
+                        "CreateDirectory" -> operations.add(FsOperation.CreateDirectory(path))
+                        "CreateEmptyFile" -> operations.add(FsOperation.CreateEmptyFile(path))
+                    }
                 }
             }
+        } catch (e: Exception) {
+            // Fallback if AI makes a JSON syntax error (like missing a comma)
+            val messageRegex = """"message"\s*:\s*"(.*?)"\s*""".toRegex(RegexOption.DOT_MATCHES_ALL)
+            val match = messageRegex.find(jsonString)
+            message = match?.groupValues?.get(1) ?: "I'm ready to help you create your structure. What would you like to build?"
         }
 
         return AIResponse(message = message, operations = operations)
