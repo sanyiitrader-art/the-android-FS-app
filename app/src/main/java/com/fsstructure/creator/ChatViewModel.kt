@@ -134,11 +134,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val key = _apiKey.value
         val treeUri = _folderUri.value
 
-        if (key.isNullOrBlank()) return
-
         viewModelScope.launch {
             _isProcessing.value = true
             
+            // 1. Ensure conversation exists
             val convId = if (currentConvId == null) {
                 database.conversationDao().insertConversation(Conversation(title = text.take(30)))
             } else {
@@ -146,10 +145,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             _activeConversationId.value = convId
 
+            // 2. Save User Message
             val fullText = if (attachmentContent.isNullOrEmpty()) text else "$text\n\n[Attached File Content]:\n$attachmentContent"
             val userMsg = Message(conversationId = convId, role = "user", content = fullText)
             database.messageDao().insertMessage(userMsg)
 
+            // 3. Check for API Key (No longer fails silently)
+            if (key.isNullOrBlank()) {
+                val errorMsg = Message(conversationId = convId, role = "assistant", content = "Please set your API Key in the sidebar first.")
+                database.messageDao().insertMessage(errorMsg)
+                _isProcessing.value = false
+                return@launch
+            }
+
+            // 4. Fetch History and Proceed
             val history = withContext(Dispatchers.IO) {
                 database.messageDao().getMessagesForConversation(convId).first()
             }

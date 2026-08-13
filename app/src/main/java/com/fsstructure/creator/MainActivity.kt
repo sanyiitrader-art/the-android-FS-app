@@ -91,7 +91,7 @@ fun MainAppContent() {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Main Chat Screen
+        // 1. Main Chat Screen (Bottom Layer)
         ChatScreen(
             viewModel = viewModel,
             onMenuClick = { viewModel.toggleSidebar() },
@@ -100,7 +100,21 @@ fun MainAppContent() {
             }
         )
 
-        // Sidebar
+        // 2. Overlay to catch clicks on the exposed chat area (Middle Layer)
+        if (isSidebarOpen) {
+            Spacer(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { viewModel.closeSidebar() }
+                        )
+                    }
+            )
+        }
+
+        // 3. Sidebar (Top Layer - now clickable!)
         Box(
             modifier = Modifier
                 .offset(x = sidebarX)
@@ -114,20 +128,6 @@ fun MainAppContent() {
                 onPickFolderClick = {
                     folderPickerLauncher.launch(null)
                 }
-            )
-        }
-
-        // Overlay to catch clicks on the exposed chat area when sidebar is open
-        if (isSidebarOpen) {
-            Spacer(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { viewModel.closeSidebar() }
-                        )
-                    }
             )
         }
     }
