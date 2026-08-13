@@ -26,6 +26,10 @@ jobs:
       with:
         gradle-version: '8.5'
 
+    - name: Generate Debug Keystore for Signing
+      run: |
+        keytool -genkey -v -keystore app/release.keystore -alias release -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=FS Structure Creator"
+
     - name: Build Release APK
       run: gradle assembleRelease --no-daemon
 

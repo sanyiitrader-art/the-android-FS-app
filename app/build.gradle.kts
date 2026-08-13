@@ -21,10 +21,21 @@ android {
         }
     }
 
+    // Sign the APK so Android allows installation
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = "password"
+            keyAlias = "release"
+            keyPassword = "password"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -56,11 +67,23 @@ android {
     }
 }
 
+// --- AUTOMATIC ICON GENERATOR ---
+// This takes your root icon-source.png and automatically sizes it for the app.
+tasks.register<Copy>("generateAppIcon") {
+    from(rootProject.file("icon-source.png"))
+    into(layout.projectDirectory.dir("src/main/res/mipmap-xxxhdpi"))
+    rename { "ic_launcher.png" }
+}
+tasks.named("preBuild") {
+    dependsOn("generateAppIcon")
+}
+// --------------------------------
+
 dependencies {
     // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0") // Added for collectAsStateWithLifecycle
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
 
