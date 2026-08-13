@@ -5,8 +5,6 @@ import androidx.room.PrimaryKey
 
 /**
  * Core data models for the application.
- * Contains Room entities for local persistence and standardized representations
- * for filesystem operations and AI communication.
  */
 
 @Entity(tableName = "conversations")
@@ -27,18 +25,16 @@ data class Message(
 
 /**
  * The standardized operation representation understood by the application.
- * The AI converts natural language into these operations.
- * The filesystem engine ONLY understands this representation.
+ * Moved `path` to the base sealed class so the executor can access it uniformly.
  */
 sealed class FsOperation {
-    data class CreateDirectory(val path: String) : FsOperation()
-    data class CreateEmptyFile(val path: String) : FsOperation()
-    // Note: No WriteContent operation exists here. This is the hard security boundary.
+    abstract val path: String
+    data class CreateDirectory(override val path: String) : FsOperation()
+    data class CreateEmptyFile(override val path: String) : FsOperation()
 }
 
 /**
  * The structured response expected from the AI.
- * Contains a natural language message for the user and a list of operations to execute.
  */
 data class AIResponse(
     val message: String,
