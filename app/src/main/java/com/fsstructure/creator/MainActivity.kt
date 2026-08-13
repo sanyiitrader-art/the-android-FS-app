@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fsstructure.creator.ui.ChatScreen
 import com.fsstructure.creator.ui.FSAppTheme
 import com.fsstructure.creator.ui.Sidebar
