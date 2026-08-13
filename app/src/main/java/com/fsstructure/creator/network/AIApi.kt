@@ -15,9 +15,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The networking layer responsible for communicating with the AI API.
- * Uses OkHttp for lightweight, fast, and asynchronous network operations.
- * The AI is strictly instructed to return a JSON object containing both a natural
- * language message and a list of standardized filesystem operations.
+ * Updated to use Google's Gemini API (generativelanguage.googleapis.com).
  */
 class AIApi {
 
@@ -28,10 +26,11 @@ class AIApi {
         .build()
 
     companion object {
-        // Using a standard OpenAI-compatible endpoint structure.
-        // The user's API key authorizes this.
-        private const val API_URL = "https://api.openai.com/v1/chat/completions"
-        private const val MODEL = "gpt-4o" // Or any compatible model the user's key supports
+        // Google Gemini API Endpoint
+        private const val API_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
+        
+        // Using the fast and capable gemini-1.5-flash model
+        private const val MODEL = "gemini-1.5-flash"
 
         // The strict system prompt that enforces application rules.
         private val SYSTEM_PROMPT = """
@@ -74,16 +73,19 @@ class AIApi {
         return withContext(Dispatchers.IO) {
             val jsonBody = buildJsonBody(messages, errorContext)
 
+            // Google AI Studio API requires the key passed as a query parameter
+            val urlWithKey = "${API_URL}$MODEL:generateContent?key=$apiKey"
+
             val request = Request.Builder()
-                .url(API_URL)
-                .addHeader("Authorization", "Bearer $apiKey")
+                .url(urlWithKey)
                 .addHeader("Content-Type", "application/json")
                 .post(jsonBody.toRequestBody("application/json".toMediaType()))
                 .build()
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    throw Exception("API Error: ${response.code} ${response.message}")
+                    val errorBody = response.body?.string() ?: "Unknown error"
+                    throw Exception("API Error: ${response.code}. $errorBody")
                 }
 
                 val responseBody = response.body?.string()
@@ -95,46 +97,51 @@ class AIApi {
     }
 
     private fun buildJsonBody(messages: List<Message>, errorContext: String?): String {
-        val messagesArray = JSONArray()
+        val contentsArray = JSONArray()
 
-        // System Prompt
-        messagesArray.put(JSONObject().apply {
-            put("role", "system")
-            put("content", SYSTEM_PROMPT)
-        })
-
-        // Error Context (if any execution errors occurred, inject as system message)
-        if (!errorContext.isNullOrBlank()) {
-            messagesArray.put(JSONObject().apply {
-                put("role", "system")
-                put("content", "Previous execution result: $errorContext. Please inform the user and ask how to proceed.")
-            })
+        // Gemini uses "user" and "model" for roles. We map "assistant" to "model".
+        for (msg in messages) {
+            val role = if (msg.role == "assistant") "model" else "user"
+            val content = JSONObject().apply {
+                put("role", role)
+                put("parts", JSONArray().put(JSONObject().put("text", msg.content)))
+            }
+            contentsArray.put(content)
         }
 
-        // Conversation History
-        for (msg in messages) {
-            messagesArray.put(JSONObject().apply {
-                put("role", msg.role)
-                put("content", msg.content)
-            })
+        // Inject filesystem error context as a final user message
+        if (!errorContext.isNullOrBlank()) {
+            val errorContent = JSONObject().apply {
+                put("role", "user")
+                put("parts", JSONArray().put(JSONObject().put("text", "Previous execution result: $errorContext. Please inform the user and ask how to proceed.")))
+            }
+            contentsArray.put(errorContent)
         }
 
         val requestBody = JSONObject().apply {
-            put("model", MODEL)
-            put("messages", messagesArray)
-            put("temperature", 0.2) // Low temperature for strict, deterministic JSON output
+            put("contents", contentsArray)
+            put("systemInstruction", JSONObject().apply {
+                put("parts", JSONArray().put(JSONObject().put("text", SYSTEM_PROMPT)))
+            })
+            put("generationConfig", JSONObject().apply {
+                put("temperature", 0.2)
+                // Gemini's native JSON mode ensures strict JSON output!
+                put("responseMimeType", "application/json")
+            })
         }
 
         return requestBody.toString()
     }
 
     private fun parseAIResponse(rawResponse: String): AIResponse {
-        // Extract the actual JSON content from the API's chat completion wrapper
+        // Extract the actual JSON content from the Gemini API response wrapper
         val apiJson = JSONObject(rawResponse)
-        val contentStr = apiJson.getJSONArray("choices")
+        val contentStr = apiJson.getJSONArray("candidates")
             .getJSONObject(0)
-            .getJSONObject("message")
-            .getString("content")
+            .getJSONObject("content")
+            .getJSONArray("parts")
+            .getJSONObject(0)
+            .getString("text")
 
         // Parse the AI's specific JSON structure
         val aiJson = JSONObject(contentStr.trim())
