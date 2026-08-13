@@ -136,7 +136,8 @@ class AIApi {
         jsonString = jsonString.trim()
 
         val operations = mutableListOf<FsOperation>()
-        val message: String
+        // Changed to var because it is assigned in try/catch blocks
+        var message: String
 
         try {
             // Attempt strict JSON parsing
