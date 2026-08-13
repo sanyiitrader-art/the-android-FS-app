@@ -13,10 +13,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-/**
- * The networking layer responsible for communicating with the AI API.
- * Updated to use Google's Gemini API (generativelanguage.googleapis.com).
- */
 class AIApi {
 
     private val client = OkHttpClient.Builder()
@@ -26,13 +22,11 @@ class AIApi {
         .build()
 
     companion object {
-        // Google Gemini API Endpoint
         private const val API_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
         
-        // Using the fast and capable gemini-1.5-flash model
-        private const val MODEL = "gemini-1.5-flash"
+        // Using exactly the model you requested
+        private const val MODEL = "gemini-3.5-flash"
 
-        // The strict system prompt that enforces application rules.
         private val SYSTEM_PROMPT = """
             You are the FS Structure Creator, an AI-powered filesystem structure creation assistant.
             Your ONLY purpose is to help the user create folders/directories and empty files.
@@ -58,13 +52,6 @@ class AIApi {
         """.trimIndent()
     }
 
-    /**
-     * Sends the conversation history to the AI API and parses the response.
-     * @param apiKey The user's active API key.
-     * @param messages The conversation history including the latest user input/attachments.
-     * @param errorContext Optional string containing filesystem errors from the previous execution attempt.
-     * @return AIResponse containing the natural language message and standardized operations.
-     */
     suspend fun fetchResponse(
         apiKey: String,
         messages: List<Message>,
@@ -73,7 +60,6 @@ class AIApi {
         return withContext(Dispatchers.IO) {
             val jsonBody = buildJsonBody(messages, errorContext)
 
-            // Google AI Studio API requires the key passed as a query parameter
             val urlWithKey = "${API_URL}$MODEL:generateContent?key=$apiKey"
 
             val request = Request.Builder()
@@ -99,7 +85,6 @@ class AIApi {
     private fun buildJsonBody(messages: List<Message>, errorContext: String?): String {
         val contentsArray = JSONArray()
 
-        // Gemini uses "user" and "model" for roles. We map "assistant" to "model".
         for (msg in messages) {
             val role = if (msg.role == "assistant") "model" else "user"
             val content = JSONObject().apply {
@@ -109,7 +94,6 @@ class AIApi {
             contentsArray.put(content)
         }
 
-        // Inject filesystem error context as a final user message
         if (!errorContext.isNullOrBlank()) {
             val errorContent = JSONObject().apply {
                 put("role", "user")
@@ -125,7 +109,6 @@ class AIApi {
             })
             put("generationConfig", JSONObject().apply {
                 put("temperature", 0.2)
-                // Gemini's native JSON mode ensures strict JSON output!
                 put("responseMimeType", "application/json")
             })
         }
@@ -134,7 +117,6 @@ class AIApi {
     }
 
     private fun parseAIResponse(rawResponse: String): AIResponse {
-        // Extract the actual JSON content from the Gemini API response wrapper
         val apiJson = JSONObject(rawResponse)
         val contentStr = apiJson.getJSONArray("candidates")
             .getJSONObject(0)
@@ -143,7 +125,6 @@ class AIApi {
             .getJSONObject(0)
             .getString("text")
 
-        // Parse the AI's specific JSON structure
         val aiJson = JSONObject(contentStr.trim())
 
         val message = aiJson.optString("message", "")
