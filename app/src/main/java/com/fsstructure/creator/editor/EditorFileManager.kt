@@ -16,18 +16,28 @@ class EditorFileManager(private val context: Context) {
         val parentId: String? = null
     )
 
-    suspend fun listFiles(folderUri: Uri): List<EditorItem> = withContext(Dispatchers.IO) {
+    // Helper to safely get Document ID from either Tree URI or Document URI
+    private fun getDocId(uri: Uri): String {
+        return if (DocumentsContract.isTreeUri(uri)) {
+            DocumentsContract.getTreeDocumentId(uri)
+        } else {
+            DocumentsContract.getDocumentId(uri)
+        }
+    }
+
+    // Helper to build the correct Document URI from a Tree URI and any child URI
+    private fun buildDocUri(treeUri: Uri, uri: Uri): Uri {
+        val docId = getDocId(uri)
+        return DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+    }
+
+    suspend fun listFiles(treeUri: Uri, folderUri: Uri): List<EditorItem> = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         val children = mutableListOf<EditorItem>()
         
         try {
-            val parentDocId = if (DocumentsContract.isTreeUri(folderUri)) {
-                DocumentsContract.getTreeDocumentId(folderUri)
-            } else {
-                DocumentsContract.getDocumentId(folderUri)
-            }
-            
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(folderUri, parentDocId)
+            val parentDocId = getDocId(folderUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
             
             val projection = arrayOf(
                 Document.COLUMN_DOCUMENT_ID,
@@ -43,7 +53,7 @@ class EditorFileManager(private val context: Context) {
                         val name = c.getString(1)
                         val mime = c.getString(2)
                         val isDir = mime == Document.MIME_TYPE_DIR
-                        val childUri = DocumentsContract.buildDocumentUriUsingTree(folderUri, docId)
+                        val childUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
                         
                         children.add(EditorItem(name, childUri, isDir, parentDocId))
                     }
@@ -56,9 +66,10 @@ class EditorFileManager(private val context: Context) {
         children.sortedWith(compareBy({ !it.isDir }, { it.name.lowercase() }))
     }
 
-    suspend fun readFile(fileUri: Uri): String? = withContext(Dispatchers.IO) {
+    suspend fun readFile(treeUri: Uri, fileUri: Uri): String? = withContext(Dispatchers.IO) {
         try {
-            context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
+            val actualDocUri = buildDocUri(treeUri, fileUri)
+            context.contentResolver.openInputStream(actualDocUri)?.use { inputStream ->
                 inputStream.bufferedReader().readText()
             }
         } catch (e: Exception) {
@@ -66,9 +77,10 @@ class EditorFileManager(private val context: Context) {
         }
     }
 
-    suspend fun writeFile(fileUri: Uri, content: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun writeFile(treeUri: Uri, fileUri: Uri, content: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            context.contentResolver.openOutputStream(fileUri, "rwt")?.use { outputStream ->
+            val actualDocUri = buildDocUri(treeUri, fileUri)
+            context.contentResolver.openOutputStream(actualDocUri, "rwt")?.use { outputStream ->
                 outputStream.write(content.toByteArray())
                 true
             } ?: false
@@ -77,16 +89,9 @@ class EditorFileManager(private val context: Context) {
         }
     }
 
-    suspend fun createItem(parentTreeUri: Uri, parentUri: Uri, name: String, isDir: Boolean): Uri? = withContext(Dispatchers.IO) {
+    suspend fun createItem(treeUri: Uri, parentUri: Uri, name: String, isDir: Boolean): Uri? = withContext(Dispatchers.IO) {
         try {
-            // SAF requires a Document URI, not a Tree URI. We must convert it.
-            val parentDocId = if (DocumentsContract.isTreeUri(parentUri)) {
-                DocumentsContract.getTreeDocumentId(parentUri)
-            } else {
-                DocumentsContract.getDocumentId(parentUri)
-            }
-            val actualParentDocUri = DocumentsContract.buildDocumentUriUsingTree(parentTreeUri, parentDocId)
-            
+            val actualParentDocUri = buildDocUri(treeUri, parentUri)
             val mimeType = if (isDir) Document.MIME_TYPE_DIR else "application/octet-stream"
             DocumentsContract.createDocument(context.contentResolver, actualParentDocUri, mimeType, name)
         } catch (e: Exception) {
@@ -96,15 +101,16 @@ class EditorFileManager(private val context: Context) {
 
     suspend fun renameItem(treeUri: Uri, itemUri: Uri, newName: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val newUri = DocumentsContract.renameDocument(context.contentResolver, itemUri, newName)
+            val actualDocUri = buildDocUri(treeUri, itemUri)
+            val newUri = DocumentsContract.renameDocument(context.contentResolver, actualDocUri, newName)
             newUri != null
         } catch (e: Exception) {
             false
         }
     }
 
-    suspend fun itemExists(parentUri: Uri, name: String): Boolean = withContext(Dispatchers.IO) {
-        val children = listFiles(parentUri)
+    suspend fun itemExists(treeUri: Uri, parentUri: Uri, name: String): Boolean = withContext(Dispatchers.IO) {
+        val children = listFiles(treeUri, parentUri)
         children.any { it.name == name }
     }
 }

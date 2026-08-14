@@ -24,11 +24,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,10 +69,6 @@ fun EditorScreen(
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onOpenExplorer) {
-                        Icon(Icons.Filled.Description, "Explorer", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    
                     IconButton(onClick = { viewModel.navigateBack() }, enabled = canGoBack.isNotEmpty()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = if (canGoBack.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                     }
@@ -83,7 +79,7 @@ fun EditorScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { viewModel.setSearchQuery(it) },
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(48.dp), // Fixed compact height
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(48.dp),
                         interactionSource = searchInteractionSource,
                         placeholder = { Text("Workspace", color = MaterialTheme.colorScheme.surfaceVariant, maxLines = 1) },
                         leadingIcon = { Icon(Icons.Filled.Search, "Search", tint = MaterialTheme.colorScheme.surfaceVariant) },
@@ -97,39 +93,15 @@ fun EditorScreen(
                             unfocusedContainerColor = MaterialTheme.colorScheme.surface
                         )
                     )
-
-                    IconButton(onClick = { showMenu = !showMenu }) {
-                        Icon(Icons.Filled.Menu, "Menu", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = { /* Settings undefined */ }) {
-                        Icon(Icons.Filled.Settings, "Settings", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(text = { Text("New File") }, onClick = { showMenu = false; onNewWorkspace(true) })
-                        DropdownMenuItem(text = { Text("New Folder") }, onClick = { showMenu = false; onNewWorkspace(false) })
-                        DropdownMenuItem(text = { Text("Open File") }, onClick = { showMenu = false; onOpenFileClick() })
-                        DropdownMenuItem(text = { Text("Open Folder") }, onClick = { showMenu = false; onOpenFolderClick() })
-                        HorizontalDivider()
-                        DropdownMenuItem(text = { Text("Save") }, onClick = { showMenu = false; viewModel.saveCurrentFile() })
-                        DropdownMenuItem(text = { Text("Save All") }, onClick = { showMenu = false; viewModel.saveAll() })
-                        DropdownMenuItem(
-                            text = { 
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(checked = autoSave, onCheckedChange = { viewModel.toggleAutoSave() })
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Auto Save")
-                                }
-                            },
-                            onClick = { viewModel.toggleAutoSave() }
-                        )
-                    }
                 }
 
-                // Show "Search Text" ONLY when search box is tapped and query is empty
+                // Centered Search Text Button / No Result Found
                 if (isSearchFocused && searchQuery.isEmpty()) {
-                    TextButton(onClick = { viewModel.setTextSearchMode(!isTextSearchMode) }, modifier = Modifier.padding(start = 72.dp, bottom = 4.dp)) {
-                        Text(if (isTextSearchMode) "Switch to File Search" else "Search Text", color = MaterialTheme.colorScheme.primary)
+                    TextButton(
+                        onClick = { viewModel.setTextSearchMode(!isTextSearchMode) },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                    ) {
+                        Text(if (isTextSearchMode) "Switch to File Search" else "Search Text", color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
                     }
                 } else if (searchQuery.isNotEmpty()) {
                     SearchResultsList(
@@ -148,41 +120,89 @@ fun EditorScreen(
             }
         }
     ) { padding ->
-        // Wrapped in Box with padding to fix overlap
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (workspaceUri == null) {
-                EditorStartScreen(
-                    onNewFile = { onNewWorkspace(true) },
-                    onOpenFile = onOpenFileClick,
-                    onOpenFolder = onOpenFolderClick
-                )
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp)
-                ) {
-                    if (currentFile != null) {
-                        BasicTextField(
-                            value = currentText,
-                            onValueChange = { viewModel.updateText(it) },
-                            modifier = Modifier.fillMaxSize(),
-                            textStyle = TextStyle(
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp
-                            ),
-                            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
-                        )
-                    } else {
-                        Text("Select a file from the Explorer", color = MaterialTheme.colorScheme.surfaceVariant)
+            // Left Activity Bar (File, Menu, Settings)
+            Column(
+                modifier = Modifier.fillMaxHeight().width(48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Column {
+                    IconButton(onClick = onOpenExplorer) {
+                        Icon(Icons.Filled.Description, "Explorer", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = !showMenu }) {
+                            Icon(Icons.Filled.Menu, "Menu", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(text = { Text("New File") }, onClick = { showMenu = false; onNewWorkspace(true) })
+                            DropdownMenuItem(text = { Text("New Folder") }, onClick = { showMenu = false; onNewWorkspace(false) })
+                            DropdownMenuItem(text = { Text("Open File") }, onClick = { showMenu = false; onOpenFileClick() })
+                            DropdownMenuItem(text = { Text("Open Folder") }, onClick = { showMenu = false; onOpenFolderClick() })
+                            HorizontalDivider()
+                            DropdownMenuItem(text = { Text("Save") }, onClick = { showMenu = false; viewModel.saveCurrentFile() })
+                            DropdownMenuItem(text = { Text("Save All") }, onClick = { showMenu = false; viewModel.saveAll() })
+                            DropdownMenuItem(
+                                text = { 
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(checked = autoSave, onCheckedChange = { viewModel.toggleAutoSave() })
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Auto Save")
+                                    }
+                                },
+                                onClick = { viewModel.toggleAutoSave() }
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(Modifier.weight(1f))
+                
+                IconButton(onClick = { /* Settings undefined */ }) {
+                    Icon(Icons.Filled.Settings, "Settings", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // Main Content Area
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                if (workspaceUri == null) {
+                    EditorStartScreen(
+                        onNewFile = { onNewWorkspace(true) },
+                        onOpenFile = onOpenFileClick,
+                        onOpenFolder = onOpenFolderClick
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp)
+                    ) {
+                        if (currentFile != null) {
+                            BasicTextField(
+                                value = currentText,
+                                onValueChange = { viewModel.updateText(it) },
+                                modifier = Modifier.fillMaxSize(),
+                                textStyle = TextStyle(
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                ),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
+                            )
+                        } else {
+                            Text("Select a file from the Explorer", color = MaterialTheme.colorScheme.surfaceVariant)
+                        }
                     }
                 }
             }
@@ -199,7 +219,14 @@ fun SearchResultsList(
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
         LazyColumn(modifier = Modifier.heightIn(max = 150.dp).padding(8.dp)) {
             if (results.isEmpty()) {
-                item { Text("No Result Found", color = MaterialTheme.colorScheme.surfaceVariant) }
+                item { 
+                    Text(
+                        text = "No Result Found", 
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    ) 
+                }
             } else {
                 items(results) { result ->
                     val displayText = if (isTextSearchMode) result as String else (result as EditorFileManager.EditorItem).name
@@ -223,11 +250,13 @@ fun EditorStartScreen(
     onOpenFile: () -> Unit,
     onOpenFolder: () -> Unit
 ) {
+    // Centered in the remaining space to avoid overlap with the left activity bar
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Start", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+        Text("Start", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
         
         StartButton(text = "New File...", icon = Icons.Filled.NoteAdd, onClick = onNewFile)
         StartButton(text = "Open File...", icon = Icons.Filled.Description, onClick = onOpenFile)
@@ -235,7 +264,7 @@ fun EditorStartScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        Text("Recent", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+        Text("Recent", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
         
         val recentText = buildAnnotatedString {
             append("You have no recent folders, ")
@@ -248,7 +277,8 @@ fun EditorStartScreen(
         Text(
             text = recentText,
             color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.clickable { onOpenFolder() }
+            modifier = Modifier.fillMaxWidth().clickable { onOpenFolder() },
+            textAlign = TextAlign.Center
         )
     }
 }

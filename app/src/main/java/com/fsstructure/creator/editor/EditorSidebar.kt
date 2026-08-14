@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowRight
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -56,7 +58,10 @@ fun EditorSidebar(
     var isError by remember { mutableStateOf(false) }
     val shakeOffset = remember { Animatable(0f) }
 
-    // Listen for pending creation signals from Start Screen / Menu
+    // Long Press Menu State
+    var showItemMenu by remember { mutableStateOf(false) }
+    var longPressedItem by remember { mutableStateOf<EditorFileManager.EditorItem?>(null) }
+
     val pendingCreation by viewModel.pendingCreation.collectAsStateWithLifecycle()
     LaunchedEffect(pendingCreation) {
         pendingCreation?.let { pending ->
@@ -73,17 +78,17 @@ fun EditorSidebar(
         value = emptyList()
         if (workspaceUri != null) {
             val items = mutableListOf<FlatItem>()
-            suspend fun traverse(uri: Uri, level: Int) {
-                val children = fileManager.listFiles(uri)
+            suspend fun traverse(treeUri: Uri, uri: Uri, level: Int) {
+                val children = fileManager.listFiles(treeUri, uri)
                 for (child in children) {
                     val isExp = expandedUris.contains(child.uri)
                     items.add(FlatItem(child, level, isExp))
                     if (child.isDir && isExp) {
-                        traverse(child.uri, level + 1)
+                        traverse(treeUri, child.uri, level + 1)
                     }
                 }
             }
-            traverse(workspaceUri, 0)
+            traverse(workspaceUri, workspaceUri, 0)
             value = items
         }
     }
@@ -168,7 +173,8 @@ fun EditorSidebar(
                             },
                             onLongClick = {
                                 selectedUri = flatItem.item.uri
-                                renamingItem = flatItem.item
+                                longPressedItem = flatItem.item
+                                showItemMenu = true
                             }
                         )
                         .padding(start = (flatItem.level * 16).dp, top = 4.dp, bottom = 4.dp),
@@ -210,6 +216,28 @@ fun EditorSidebar(
                         onCancel = { creatingParentUri = null }
                     )
                 }
+
+                if (renamingItem?.uri == flatItem.item.uri) {
+                    InlineEditorField(
+                        isDir = flatItem.item.isDir,
+                        isError = isError,
+                        shakeOffset = shakeOffset.value,
+                        initialText = flatItem.item.name,
+                        onSave = { newName ->
+                            renamingItem?.let { item ->
+                                viewModel.renameItem(item.uri, newName) { success ->
+                                    if (success) {
+                                        renamingItem = null
+                                        refreshKey++
+                                    } else {
+                                        triggerError()
+                                    }
+                                }
+                            }
+                        },
+                        onCancel = { renamingItem = null }
+                    )
+                }
             }
 
             if (creatingParentUri == workspaceUri && workspaceUri != null) {
@@ -236,6 +264,36 @@ fun EditorSidebar(
             }
         }
     }
+
+    // Long Press Popup Menu
+    DropdownMenu(expanded = showItemMenu, onDismissRequest = { showItemMenu = false }) {
+        longPressedItem?.let { item ->
+            if (item.isDir) {
+                DropdownMenuItem(
+                    text = { Text("New File") },
+                    onClick = {
+                        showItemMenu = false
+                        expandedUris = expandedUris + item.uri
+                        creatingParentUri = item.uri
+                        isCreatingDir = false
+                    }
+                )
+            } else {
+                DropdownMenuItem(
+                    text = { Text("New File") },
+                    onClick = { showItemMenu = false },
+                    enabled = false
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Rename") },
+                onClick = {
+                    showItemMenu = false
+                    renamingItem = item
+                }
+            )
+        }
+    }
 }
 
 @Composable
@@ -243,10 +301,11 @@ fun InlineEditorField(
     isDir: Boolean,
     isError: Boolean,
     shakeOffset: Float,
+    initialText: String = "",
     onSave: (String) -> Unit,
     onCancel: () -> Unit
 ) {
-    var text by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf(initialText) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -271,7 +330,7 @@ fun InlineEditorField(
                 focusedBorderColor = if (isError) Color.Red else MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = if (isError) Color.Red else MaterialTheme.colorScheme.surfaceVariant
             ),
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
                 if (text.isNotBlank()) onSave(text)
             })

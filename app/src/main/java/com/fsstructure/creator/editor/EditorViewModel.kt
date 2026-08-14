@@ -48,7 +48,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val _searchResults = MutableStateFlow<List<Any>>(emptyList())
     val searchResults: StateFlow<List<Any>> = _searchResults.asStateFlow()
 
-    // --- NEW: Signal for Sidebar to start creation ---
     data class PendingCreation(val parentUri: Uri?, val isDir: Boolean)
     private val _pendingCreation = MutableStateFlow<PendingCreation?>(null)
     val pendingCreation: StateFlow<PendingCreation?> = _pendingCreation.asStateFlow()
@@ -59,7 +58,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun clearPendingCreation() {
         _pendingCreation.value = null
     }
-    // ------------------------------------------------
 
     fun setWorkspace(uri: Uri?) {
         _workspaceUri.value = uri
@@ -110,7 +108,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun searchDirectory(treeUri: Uri, currentDirUri: Uri, query: String, results: MutableList<EditorFileManager.EditorItem>) {
-        val children = fileManager.listFiles(currentDirUri)
+        val children = fileManager.listFiles(treeUri, currentDirUri)
         for (child in children) {
             if (child.name.contains(query, ignoreCase = true)) {
                 results.add(child)
@@ -135,7 +133,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _isDirty.value = false
 
         viewModelScope.launch {
-            val content = fileManager.readFile(item.uri) ?: ""
+            val treeUri = _workspaceUri.value ?: return@launch
+            val content = fileManager.readFile(treeUri, item.uri) ?: ""
             _currentText.value = unsavedChanges[item.uri] ?: content
             _isDirty.value = unsavedChanges.containsKey(item.uri)
         }
@@ -155,7 +154,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _isDirty.value = false
 
         viewModelScope.launch {
-            val content = fileManager.readFile(previous.uri) ?: ""
+            val treeUri = _workspaceUri.value ?: return@launch
+            val content = fileManager.readFile(treeUri, previous.uri) ?: ""
             _currentText.value = unsavedChanges[previous.uri] ?: content
             _isDirty.value = unsavedChanges.containsKey(previous.uri)
         }
@@ -175,7 +175,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _isDirty.value = false
 
         viewModelScope.launch {
-            val content = fileManager.readFile(next.uri) ?: ""
+            val treeUri = _workspaceUri.value ?: return@launch
+            val content = fileManager.readFile(treeUri, next.uri) ?: ""
             _currentText.value = unsavedChanges[next.uri] ?: content
             _isDirty.value = unsavedChanges.containsKey(next.uri)
         }
@@ -201,9 +202,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun saveCurrentFile() {
         val current = _currentFile.value ?: return
         val text = _currentText.value
+        val treeUri = _workspaceUri.value ?: return
 
         viewModelScope.launch {
-            val success = fileManager.writeFile(current.uri, text)
+            val success = fileManager.writeFile(treeUri, current.uri, text)
             if (success) {
                 _isDirty.value = false
                 unsavedChanges.remove(current.uri)
@@ -212,10 +214,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun saveAll() {
+        val treeUri = _workspaceUri.value ?: return
         viewModelScope.launch {
             val entries = unsavedChanges.toMap()
             for ((uri, text) in entries) {
-                val success = fileManager.writeFile(uri, text)
+                val success = fileManager.writeFile(treeUri, uri, text)
                 if (success) {
                     unsavedChanges.remove(uri)
                 }
@@ -234,13 +237,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun createItem(parentUri: Uri, name: String, isDir: Boolean, onResult: (Uri?) -> Unit) {
         viewModelScope.launch {
-            val exists = fileManager.itemExists(parentUri, name)
+            val treeUri = _workspaceUri.value ?: return@launch
+            val exists = fileManager.itemExists(treeUri, parentUri, name)
             if (exists) {
                 onResult(null)
                 return@launch
             }
 
-            val treeUri = _workspaceUri.value ?: return@launch
             val newUri = fileManager.createItem(treeUri, parentUri, name, isDir)
             onResult(newUri)
         }
