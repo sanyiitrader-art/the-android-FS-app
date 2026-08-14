@@ -1,7 +1,6 @@
 package com.fsstructure.creator.editor
 
 import android.content.Context
-import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
@@ -36,20 +35,23 @@ class EditorFileManager(private val context: Context) {
                 Document.COLUMN_MIME_TYPE
             )
             
-            val cursor: Cursor? = resolver.query(childrenUri, projection, null, null, null)
-            cursor?.use {
-                while (it.moveToNext()) {
-                    val docId = it.getString(0)
-                    val name = it.getString(1)
-                    val mime = it.getString(2)
-                    val isDir = mime == Document.MIME_TYPE_DIR
-                    val childUri = DocumentsContract.buildDocumentUriUsingTree(folderUri, docId)
-                    
-                    children.add(EditorItem(name, childUri, isDir, parentDocId))
+            val cursor = resolver.query(childrenUri, projection, null, null, null)
+            if (cursor != null) {
+                cursor.use { c ->
+                    while (c.moveToNext()) {
+                        val docId = c.getString(0)
+                        val name = c.getString(1)
+                        val mime = c.getString(2)
+                        val isDir = mime == Document.MIME_TYPE_DIR
+                        val childUri = DocumentsContract.buildDocumentUriUsingTree(folderUri, docId)
+                        
+                        children.add(EditorItem(name, childUri, isDir, parentDocId))
+                    }
                 }
+                cursor.close()
             }
         } catch (e: Exception) {
-            emptyList()
+            return@withContext emptyList()
         }
         
         children.sortedWith(compareBy({ !it.isDir }, { it.name.lowercase() }))
