@@ -138,12 +138,13 @@ class EditorFileManager(private val context: Context) {
         }
     }
 
-    suspend fun renameItem(treeUri: Uri, itemUri: Uri, newName: String): Boolean = withContext(Dispatchers.IO) {
+    // Updated to return the new Uri
+    suspend fun renameItem(treeUri: Uri, itemUri: Uri, newName: String): Uri? = withContext(Dispatchers.IO) {
         try {
             if (isLocalFile(itemUri)) {
                 val file = File(itemUri.path!!)
                 val newFile = File(file.parentFile, newName)
-                file.renameTo(newFile)
+                if (file.renameTo(newFile)) Uri.fromFile(newFile) else null
             } else {
                 val docId = if (DocumentsContract.isTreeUri(itemUri)) {
                     DocumentsContract.getTreeDocumentId(itemUri)
@@ -151,10 +152,10 @@ class EditorFileManager(private val context: Context) {
                     DocumentsContract.getDocumentId(itemUri)
                 }
                 val actualDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                DocumentsContract.renameDocument(context.contentResolver, actualDocUri, newName) != null
+                DocumentsContract.renameDocument(context.contentResolver, actualDocUri, newName)
             }
         } catch (e: Exception) {
-            false
+            null
         }
     }
 

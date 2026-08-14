@@ -249,11 +249,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun renameItem(itemUri: Uri, newName: String, onResult: (Boolean) -> Unit) {
+    // Updated to return Uri? instead of Boolean
+    fun renameItem(itemUri: Uri, newName: String, onResult: (Uri?) -> Unit) {
         viewModelScope.launch {
             val treeUri = _workspaceUri.value ?: return@launch
-            val success = fileManager.renameItem(treeUri, itemUri, newName)
-            onResult(success)
+            val newUri = fileManager.renameItem(treeUri, itemUri, newName)
+            onResult(newUri)
         }
     }
 }

@@ -72,12 +72,10 @@ fun EditorSidebar(
         }
     }
 
-    // Build the tree. We DO NOT clear the list to empty during recomputation to prevent vanishing.
     val treeItems by produceState(initialValue = emptyList<FlatItem>(), key1 = workspaceUri, key2 = expandedUris, key3 = refreshKey) {
         if (workspaceUri != null) {
             val items = mutableListOf<FlatItem>()
             try {
-                // Fetch Root Folder Name safely
                 val rootName = fileManager.getFileName(workspaceUri) ?: "Workspace"
                 val rootItem = EditorFileManager.EditorItem(rootName, workspaceUri, true)
                 val isRootExp = expandedUris.contains(workspaceUri)
@@ -96,10 +94,9 @@ fun EditorSidebar(
                     }
                     traverse(workspaceUri, workspaceUri, 1)
                 }
-                // Only commit the new list if everything succeeded
                 value = items
             } catch (e: Exception) {
-                // If an error happens, keep the existing value (do nothing)
+                // Keep existing value on error
             }
         }
     }
@@ -114,6 +111,13 @@ fun EditorSidebar(
             shakeOffset.animateTo(0f, animationSpec = tween(50))
             isError = false
         }
+    }
+
+    // Helper to instantly trigger creation
+    fun startCreation(parentUri: Uri, isDir: Boolean) {
+        expandedUris = expandedUris + parentUri
+        creatingParentUri = parentUri
+        isCreatingDir = isDir
     }
 
     Column(
@@ -135,11 +139,7 @@ fun EditorSidebar(
                         if (selected.item.isDir) selected.item.uri else workspaceUri
                     } ?: workspaceUri
                     
-                    targetParent?.let { uri ->
-                        expandedUris = expandedUris + uri
-                        creatingParentUri = uri
-                        isCreatingDir = true
-                    }
+                    if (targetParent != null) startCreation(targetParent, true)
                 }) {
                     Icon(Icons.Filled.CreateNewFolder, "New Folder", tint = MaterialTheme.colorScheme.onSurface)
                 }
@@ -148,11 +148,7 @@ fun EditorSidebar(
                         if (selected.item.isDir) selected.item.uri else workspaceUri
                     } ?: workspaceUri
                     
-                    targetParent?.let { uri ->
-                        expandedUris = expandedUris + uri
-                        creatingParentUri = uri
-                        isCreatingDir = false
-                    }
+                    if (targetParent != null) startCreation(targetParent, false)
                 }) {
                     Icon(Icons.Filled.NoteAdd, "New File", tint = MaterialTheme.colorScheme.onSurface)
                 }
@@ -236,8 +232,15 @@ fun EditorSidebar(
                         initialText = flatItem.item.name,
                         onSave = { newName ->
                             renamingItem?.let { item ->
-                                viewModel.renameItem(item.uri, newName) { success ->
-                                    if (success) {
+                                viewModel.renameItem(item.uri, newName) { newUri ->
+                                    if (newUri != null) {
+                                        // Update tracking states so the tree doesn't break
+                                        if (expandedUris.contains(item.uri)) {
+                                            expandedUris = expandedUris - item.uri + newUri
+                                        }
+                                        if (selectedUri == item.uri) {
+                                            selectedUri = newUri
+                                        }
                                         renamingItem = null
                                         refreshKey++
                                     } else {
@@ -260,9 +263,7 @@ fun EditorSidebar(
                     text = { Text("New File") },
                     onClick = {
                         showItemMenu = false
-                        expandedUris = expandedUris + item.uri
-                        creatingParentUri = item.uri
-                        isCreatingDir = false
+                        startCreation(item.uri, false)
                     }
                 )
             } else {
