@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowRight
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,7 +57,6 @@ fun EditorSidebar(
     var isError by remember { mutableStateOf(false) }
     val shakeOffset = remember { Animatable(0f) }
 
-    // Long Press Menu State
     var showItemMenu by remember { mutableStateOf(false) }
     var longPressedItem by remember { mutableStateOf<EditorFileManager.EditorItem?>(null) }
 
@@ -74,22 +72,35 @@ fun EditorSidebar(
         }
     }
 
+    // Build the tree. We DO NOT clear the list to empty during recomputation to prevent vanishing.
     val treeItems by produceState(initialValue = emptyList<FlatItem>(), key1 = workspaceUri, key2 = expandedUris, key3 = refreshKey) {
-        value = emptyList()
         if (workspaceUri != null) {
             val items = mutableListOf<FlatItem>()
-            suspend fun traverse(treeUri: Uri, uri: Uri, level: Int) {
-                val children = fileManager.listFiles(treeUri, uri)
-                for (child in children) {
-                    val isExp = expandedUris.contains(child.uri)
-                    items.add(FlatItem(child, level, isExp))
-                    if (child.isDir && isExp) {
-                        traverse(treeUri, child.uri, level + 1)
+            try {
+                // Fetch Root Folder Name safely
+                val rootName = fileManager.getFileName(workspaceUri) ?: "Workspace"
+                val rootItem = EditorFileManager.EditorItem(rootName, workspaceUri, true)
+                val isRootExp = expandedUris.contains(workspaceUri)
+                items.add(FlatItem(rootItem, 0, isRootExp))
+
+                if (isRootExp) {
+                    suspend fun traverse(treeUri: Uri, uri: Uri, level: Int) {
+                        val children = fileManager.listFiles(treeUri, uri)
+                        for (child in children) {
+                            val isExp = expandedUris.contains(child.uri)
+                            items.add(FlatItem(child, level, isExp))
+                            if (child.isDir && isExp) {
+                                traverse(treeUri, child.uri, level + 1)
+                            }
+                        }
                     }
+                    traverse(workspaceUri, workspaceUri, 1)
                 }
+                // Only commit the new list if everything succeeded
+                value = items
+            } catch (e: Exception) {
+                // If an error happens, keep the existing value (do nothing)
             }
-            traverse(workspaceUri, workspaceUri, 0)
-            value = items
         }
     }
 
@@ -155,7 +166,7 @@ fun EditorSidebar(
                 .weight(1f)
                 .horizontalScroll(rememberScrollState())
         ) {
-            items(treeItems, key = { it.item.uri.toString() }) { flatItem ->
+            items(treeItems, key = { it.item.uri.toString() + it.level }) { flatItem ->
                 val isSelected = flatItem.item.uri == selectedUri
                 Row(
                     modifier = Modifier
@@ -239,33 +250,9 @@ fun EditorSidebar(
                     )
                 }
             }
-
-            if (creatingParentUri == workspaceUri && workspaceUri != null) {
-                item {
-                    InlineEditorField(
-                        isDir = isCreatingDir,
-                        isError = isError,
-                        shakeOffset = shakeOffset.value,
-                        onSave = { name ->
-                            workspaceUri?.let { wsUri ->
-                                viewModel.createItem(wsUri, name, isCreatingDir) { newUri ->
-                                    if (newUri != null) {
-                                        creatingParentUri = null
-                                        refreshKey++
-                                    } else {
-                                        triggerError()
-                                    }
-                                }
-                            }
-                        },
-                        onCancel = { creatingParentUri = null }
-                    )
-                }
-            }
         }
     }
 
-    // Long Press Popup Menu
     DropdownMenu(expanded = showItemMenu, onDismissRequest = { showItemMenu = false }) {
         longPressedItem?.let { item ->
             if (item.isDir) {

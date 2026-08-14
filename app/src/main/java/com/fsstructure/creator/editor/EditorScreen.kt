@@ -181,28 +181,25 @@ fun EditorScreen(
                         onOpenFolder = onOpenFolderClick
                     )
                 } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp)
-                    ) {
-                        if (currentFile != null) {
-                            BasicTextField(
-                                value = currentText,
-                                onValueChange = { viewModel.updateText(it) },
-                                modifier = Modifier.fillMaxSize(),
-                                textStyle = TextStyle(
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp
-                                ),
-                                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
-                            )
-                        } else {
-                            Text("Select a file from the Explorer", color = MaterialTheme.colorScheme.surfaceVariant)
-                        }
+                    if (currentFile != null) {
+                        // Moved verticalScroll directly to BasicTextField to fix keyboard input blocking
+                        BasicTextField(
+                            value = currentText,
+                            onValueChange = { viewModel.updateText(it) },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                            textStyle = TextStyle(
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            ),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
+                        )
+                    } else {
+                        Text("Select a file from the Explorer", color = MaterialTheme.colorScheme.surfaceVariant)
                     }
                 }
             }
@@ -250,7 +247,6 @@ fun EditorStartScreen(
     onOpenFile: () -> Unit,
     onOpenFolder: () -> Unit
 ) {
-    // Centered in the remaining space to avoid overlap with the left activity bar
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
