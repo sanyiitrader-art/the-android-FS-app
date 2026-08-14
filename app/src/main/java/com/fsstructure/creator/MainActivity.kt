@@ -86,8 +86,6 @@ fun MainAppContent() {
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
-            // For Open File, we just open the file directly. 
-            // Full workspace parent resolution is complex in SAF, so we open the file as a standalone item.
             val item = EditorFileManager.EditorItem(
                 name = uri.lastPathSegment ?: "file",
                 uri = uri,
@@ -125,11 +123,11 @@ fun MainAppContent() {
                 detectHorizontalDragGestures(
                     onDragEnd = {
                         if (isEditorOpen) {
-                            if (dragOffset > 100) isEditorOpen = false // Swipe right to AI
-                            if (dragOffset < -100) isEditorSidebarOpen = true // Swipe left to Editor Sidebar
+                            if (dragOffset > 100) isEditorOpen = false
+                            if (dragOffset < -100) isEditorSidebarOpen = true
                         } else {
-                            if (dragOffset > 100 && !isChatSidebarOpen) chatViewModel.toggleSidebar() // Swipe right to Chat Sidebar
-                            if (dragOffset < -100) isEditorOpen = true // Swipe left to Editor
+                            if (dragOffset > 100 && !isChatSidebarOpen) chatViewModel.toggleSidebar()
+                            if (dragOffset < -100) isEditorOpen = true
                         }
                         dragOffset = 0f
                     },
@@ -147,7 +145,6 @@ fun MainAppContent() {
                 onOpenFileClick = { editorFilePickerLauncher.launch(arrayOf("*/*")) },
                 onOpenFolderClick = { editorFolderPickerLauncher.launch(null) },
                 onNewWorkspace = { isFile ->
-                    // Create new workspace in app external storage to avoid permission issues
                     val baseDir = context.getExternalFilesDir(null)
                     var newFolder = File(baseDir, "new folder")
                     var i = 2
@@ -156,7 +153,10 @@ fun MainAppContent() {
                         i++
                     }
                     newFolder.mkdirs()
-                    editorViewModel.setWorkspace(Uri.fromFile(newFolder))
+                    val wsUri = Uri.fromFile(newFolder)
+                    editorViewModel.setWorkspace(wsUri)
+                    // Trigger the sidebar naming box automatically
+                    editorViewModel.triggerCreation(wsUri, !isFile)
                     isEditorSidebarOpen = true
                 },
                 onBackToAI = { isEditorOpen = false },
@@ -196,7 +196,7 @@ fun MainAppContent() {
                 viewModel = chatViewModel,
                 onMenuClick = { chatViewModel.toggleSidebar() },
                 onAttachClick = { chatFilePickerLauncher.launch(arrayOf("text/plain", "text/markdown")) },
-                onOpenEditor = { isEditorOpen = true } // Trigger from icon
+                onOpenEditor = { isEditorOpen = true }
             )
 
             // Chat Sidebar Overlay

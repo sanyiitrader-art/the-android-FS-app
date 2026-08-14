@@ -3,6 +3,8 @@ package com.fsstructure.creator.editor
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +56,8 @@ fun EditorScreen(
     val canGoForward by viewModel.navForwardHistory.collectAsStateWithLifecycle()
 
     var showMenu by remember { mutableStateOf(false) }
+    val searchInteractionSource = remember { MutableInteractionSource() }
+    val isSearchFocused by searchInteractionSource.collectIsFocusedAsState()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -69,7 +73,6 @@ fun EditorScreen(
                         Icon(Icons.Filled.Description, "Explorer", tint = MaterialTheme.colorScheme.primary)
                     }
                     
-                    // Removed .value because 'by' collectAsStateWithLifecycle already unwraps it
                     IconButton(onClick = { viewModel.navigateBack() }, enabled = canGoBack.isNotEmpty()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = if (canGoBack.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                     }
@@ -80,8 +83,9 @@ fun EditorScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { viewModel.setSearchQuery(it) },
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                        placeholder = { Text("Workspace", color = MaterialTheme.colorScheme.surfaceVariant) },
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(48.dp), // Fixed compact height
+                        interactionSource = searchInteractionSource,
+                        placeholder = { Text("Workspace", color = MaterialTheme.colorScheme.surfaceVariant, maxLines = 1) },
                         leadingIcon = { Icon(Icons.Filled.Search, "Search", tint = MaterialTheme.colorScheme.surfaceVariant) },
                         singleLine = true,
                         shape = MaterialTheme.shapes.small,
@@ -122,11 +126,12 @@ fun EditorScreen(
                     }
                 }
 
-                if (searchQuery.isEmpty()) {
+                // Show "Search Text" ONLY when search box is tapped and query is empty
+                if (isSearchFocused && searchQuery.isEmpty()) {
                     TextButton(onClick = { viewModel.setTextSearchMode(!isTextSearchMode) }, modifier = Modifier.padding(start = 72.dp, bottom = 4.dp)) {
                         Text(if (isTextSearchMode) "Switch to File Search" else "Search Text", color = MaterialTheme.colorScheme.primary)
                     }
-                } else {
+                } else if (searchQuery.isNotEmpty()) {
                     SearchResultsList(
                         results = searchResults,
                         isTextSearchMode = isTextSearchMode,
@@ -143,36 +148,42 @@ fun EditorScreen(
             }
         }
     ) { padding ->
-        if (workspaceUri == null) {
-            EditorStartScreen(
-                onNewFile = { onNewWorkspace(true) },
-                onOpenFile = onOpenFileClick,
-                onOpenFolder = onOpenFolderClick
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .background(MaterialTheme.colorScheme.background)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
-            ) {
-                if (currentFile != null) {
-                    BasicTextField(
-                        value = currentText,
-                        onValueChange = { viewModel.updateText(it) },
-                        modifier = Modifier.fillMaxSize(),
-                        textStyle = TextStyle(
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp
-                        ),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
-                    )
-                } else {
-                    Text("Select a file from the Explorer", color = MaterialTheme.colorScheme.surfaceVariant)
+        // Wrapped in Box with padding to fix overlap
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            if (workspaceUri == null) {
+                EditorStartScreen(
+                    onNewFile = { onNewWorkspace(true) },
+                    onOpenFile = onOpenFileClick,
+                    onOpenFolder = onOpenFolderClick
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
+                ) {
+                    if (currentFile != null) {
+                        BasicTextField(
+                            value = currentText,
+                            onValueChange = { viewModel.updateText(it) },
+                            modifier = Modifier.fillMaxSize(),
+                            textStyle = TextStyle(
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            ),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
+                        )
+                    } else {
+                        Text("Select a file from the Explorer", color = MaterialTheme.colorScheme.surfaceVariant)
+                    }
                 }
             }
         }

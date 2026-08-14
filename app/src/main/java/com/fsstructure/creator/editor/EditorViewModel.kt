@@ -12,20 +12,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * The state holder for the integrated code editor.
- * Manages session-only navigation history, workspace state, and file editing state.
- * DOES NOT persist history or recent files across app launches.
- */
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
 
     private val fileManager = EditorFileManager(application)
 
-    // Workspace State
     private val _workspaceUri = MutableStateFlow<Uri?>(null)
     val workspaceUri: StateFlow<Uri?> = _workspaceUri.asStateFlow()
 
-    // Current File State
     private val _currentFile = MutableStateFlow<EditorFileManager.EditorItem?>(null)
     val currentFile: StateFlow<EditorFileManager.EditorItem?> = _currentFile.asStateFlow()
 
@@ -35,21 +28,17 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val _isDirty = MutableStateFlow(false)
     val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
 
-    // Unsaved files map (URI -> Text) for Save All functionality
     private val unsavedChanges = mutableMapOf<Uri, String>()
 
-    // Navigation History (Session only)
     private val _navBackHistory = MutableStateFlow<List<EditorFileManager.EditorItem>>(emptyList())
     val navBackHistory: StateFlow<List<EditorFileManager.EditorItem>> = _navBackHistory.asStateFlow()
 
     private val _navForwardHistory = MutableStateFlow<List<EditorFileManager.EditorItem>>(emptyList())
     val navForwardHistory: StateFlow<List<EditorFileManager.EditorItem>> = _navForwardHistory.asStateFlow()
 
-    // Settings
     private val _autoSave = MutableStateFlow(false)
     val autoSave: StateFlow<Boolean> = _autoSave.asStateFlow()
 
-    // Search State
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -58,6 +47,19 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _searchResults = MutableStateFlow<List<Any>>(emptyList())
     val searchResults: StateFlow<List<Any>> = _searchResults.asStateFlow()
+
+    // --- NEW: Signal for Sidebar to start creation ---
+    data class PendingCreation(val parentUri: Uri?, val isDir: Boolean)
+    private val _pendingCreation = MutableStateFlow<PendingCreation?>(null)
+    val pendingCreation: StateFlow<PendingCreation?> = _pendingCreation.asStateFlow()
+
+    fun triggerCreation(parentUri: Uri?, isDir: Boolean) {
+        _pendingCreation.value = PendingCreation(parentUri, isDir)
+    }
+    fun clearPendingCreation() {
+        _pendingCreation.value = null
+    }
+    // ------------------------------------------------
 
     fun setWorkspace(uri: Uri?) {
         _workspaceUri.value = uri
@@ -87,7 +89,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
         viewModelScope.launch {
             if (_isTextSearchMode.value) {
-                // Search in current text
                 val text = _currentText.value
                 val indices = text.split(query).dropLast(1).runningFold(0) { acc, str -> acc + str.length + query.length }
                 val results = indices.map { index ->
@@ -97,12 +98,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 _searchResults.value = results
             } else {
-                // Search files in workspace
                 val rootUri = _workspaceUri.value ?: return@launch
                 val results = withContext(Dispatchers.IO) {
                     val foundFiles = mutableListOf<EditorFileManager.EditorItem>()
                     searchDirectory(rootUri, rootUri, query, foundFiles)
-                    foundFiles.take(20) // Limit results for performance
+                    foundFiles.take(20)
                 }
                 _searchResults.value = results
             }
@@ -123,22 +123,19 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun openFile(item: EditorFileManager.EditorItem) {
         if (_currentFile.value != null && _isDirty.value) {
-            // Store unsaved changes before switching
             unsavedChanges[_currentFile.value!!.uri] = _currentText.value
         }
 
-        // Update navigation history
         _currentFile.value?.let { current ->
             _navBackHistory.update { it + current }
         }
-        _navForwardHistory.value = emptyList() // Clear forward history on new open
+        _navForwardHistory.value = emptyList()
 
         _currentFile.value = item
         _isDirty.value = false
 
         viewModelScope.launch {
             val content = fileManager.readFile(item.uri) ?: ""
-            // Restore unsaved changes if they exist
             _currentText.value = unsavedChanges[item.uri] ?: content
             _isDirty.value = unsavedChanges.containsKey(item.uri)
         }
@@ -147,7 +144,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun navigateBack() {
         if (_navBackHistory.value.isEmpty()) return
 
-        // Current goes to forward
         _currentFile.value?.let { current ->
             _navForwardHistory.update { it + current }
         }
@@ -217,14 +213,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun saveAll() {
         viewModelScope.launch {
-            val entries = unsavedChanges.toMap() // Copy to avoid concurrent modification
+            val entries = unsavedChanges.toMap()
             for ((uri, text) in entries) {
                 val success = fileManager.writeFile(uri, text)
                 if (success) {
                     unsavedChanges.remove(uri)
                 }
             }
-            // If current file was saved, update dirty flag
             _currentFile.value?.let {
                 if (!unsavedChanges.containsKey(it.uri)) {
                     _isDirty.value = false
@@ -237,13 +232,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _autoSave.value = !_autoSave.value
     }
 
-    /**
-     * Creates a new file or folder.
-     * @param parentUri The directory to create the item in.
-     * @param name The name of the new item.
-     * @param isDir True for folder, false for file.
-     * @param onResult Callback with the new URI if successful, null otherwise (e.g., duplicate).
-     */
     fun createItem(parentUri: Uri, name: String, isDir: Boolean, onResult: (Uri?) -> Unit) {
         viewModelScope.launch {
             val exists = fileManager.itemExists(parentUri, name)
@@ -258,9 +246,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /**
-     * Renames an existing file or folder.
-     */
     fun renameItem(itemUri: Uri, newName: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             val treeUri = _workspaceUri.value ?: return@launch

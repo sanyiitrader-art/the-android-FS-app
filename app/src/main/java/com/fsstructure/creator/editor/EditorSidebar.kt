@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 data class FlatItem(
@@ -54,6 +55,19 @@ fun EditorSidebar(
     var renamingItem by remember { mutableStateOf<EditorFileManager.EditorItem?>(null) }
     var isError by remember { mutableStateOf(false) }
     val shakeOffset = remember { Animatable(0f) }
+
+    // Listen for pending creation signals from Start Screen / Menu
+    val pendingCreation by viewModel.pendingCreation.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingCreation) {
+        pendingCreation?.let { pending ->
+            pending.parentUri?.let { pUri ->
+                expandedUris = expandedUris + pUri
+                creatingParentUri = pUri
+                isCreatingDir = pending.isDir
+                viewModel.clearPendingCreation()
+            }
+        }
+    }
 
     val treeItems by produceState(initialValue = emptyList<FlatItem>(), key1 = workspaceUri, key2 = expandedUris, key3 = refreshKey) {
         value = emptyList()

@@ -48,7 +48,6 @@ class EditorFileManager(private val context: Context) {
                         children.add(EditorItem(name, childUri, isDir, parentDocId))
                     }
                 }
-                cursor.close()
             }
         } catch (e: Exception) {
             return@withContext emptyList()
@@ -80,14 +79,16 @@ class EditorFileManager(private val context: Context) {
 
     suspend fun createItem(parentTreeUri: Uri, parentUri: Uri, name: String, isDir: Boolean): Uri? = withContext(Dispatchers.IO) {
         try {
+            // SAF requires a Document URI, not a Tree URI. We must convert it.
             val parentDocId = if (DocumentsContract.isTreeUri(parentUri)) {
                 DocumentsContract.getTreeDocumentId(parentUri)
             } else {
                 DocumentsContract.getDocumentId(parentUri)
             }
+            val actualParentDocUri = DocumentsContract.buildDocumentUriUsingTree(parentTreeUri, parentDocId)
             
             val mimeType = if (isDir) Document.MIME_TYPE_DIR else "application/octet-stream"
-            DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, name)
+            DocumentsContract.createDocument(context.contentResolver, actualParentDocUri, mimeType, name)
         } catch (e: Exception) {
             null
         }
@@ -95,12 +96,6 @@ class EditorFileManager(private val context: Context) {
 
     suspend fun renameItem(treeUri: Uri, itemUri: Uri, newName: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val docId = if (DocumentsContract.isTreeUri(itemUri)) {
-                DocumentsContract.getTreeDocumentId(itemUri)
-            } else {
-                DocumentsContract.getDocumentId(itemUri)
-            }
-            
             val newUri = DocumentsContract.renameDocument(context.contentResolver, itemUri, newName)
             newUri != null
         } catch (e: Exception) {
