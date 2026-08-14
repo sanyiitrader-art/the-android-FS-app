@@ -183,8 +183,8 @@ fun EditorSidebar(
                         shakeOffset = shakeOffset.value,
                         onSave = { name ->
                             creatingParentUri?.let { pUri ->
-                                viewModel.createItem(pUri, name, isCreatingDir) { success ->
-                                    if (success) {
+                                viewModel.createItem(pUri, name, isCreatingDir) { newUri ->
+                                    if (newUri != null) {
                                         creatingParentUri = null
                                         refreshKey++
                                     } else {
@@ -206,8 +206,8 @@ fun EditorSidebar(
                         shakeOffset = shakeOffset.value,
                         onSave = { name ->
                             workspaceUri?.let { wsUri ->
-                                viewModel.createItem(wsUri, name, isCreatingDir) { success ->
-                                    if (success) {
+                                viewModel.createItem(wsUri, name, isCreatingDir) { newUri ->
+                                    if (newUri != null) {
                                         creatingParentUri = null
                                         refreshKey++
                                     } else {

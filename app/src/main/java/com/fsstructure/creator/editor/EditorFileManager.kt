@@ -8,16 +8,8 @@ import android.provider.DocumentsContract.Document
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * A lightweight Android SAF (Storage Access Framework) wrapper for the editor.
- * Handles listing directory trees, reading/writing text, and file/folder management.
- * Operates strictly within user-authorized URIs. No execution, no compilation.
- */
 class EditorFileManager(private val context: Context) {
 
-    /**
-     * Represents a file or folder in the workspace tree.
-     */
     data class EditorItem(
         val name: String,
         val uri: Uri,
@@ -25,9 +17,6 @@ class EditorFileManager(private val context: Context) {
         val parentId: String? = null
     )
 
-    /**
-     * Lists immediate children of a directory.
-     */
     suspend fun listFiles(folderUri: Uri): List<EditorItem> = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         val children = mutableListOf<EditorItem>()
@@ -47,11 +36,12 @@ class EditorFileManager(private val context: Context) {
                 Document.COLUMN_MIME_TYPE
             )
             
-            resolver.query(childrenUri, projection, null, null, null)?.use { cursor: Cursor ->
-                while (cursor.moveToNext()) {
-                    val docId = cursor.getString(0)
-                    val name = cursor.getString(1)
-                    val mime = cursor.getString(2)
+            val cursor: Cursor? = resolver.query(childrenUri, projection, null, null, null)
+            cursor?.use {
+                while (it.moveToNext()) {
+                    val docId = it.getString(0)
+                    val name = it.getString(1)
+                    val mime = it.getString(2)
                     val isDir = mime == Document.MIME_TYPE_DIR
                     val childUri = DocumentsContract.buildDocumentUriUsingTree(folderUri, docId)
                     
@@ -59,17 +49,12 @@ class EditorFileManager(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            // Return empty list on permission/query errors to avoid crashing the UI
             emptyList()
         }
         
-        // Sort: Folders first, then alphabetically
         children.sortedWith(compareBy({ !it.isDir }, { it.name.lowercase() }))
     }
 
-    /**
-     * Reads text content from a file.
-     */
     suspend fun readFile(fileUri: Uri): String? = withContext(Dispatchers.IO) {
         try {
             context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
@@ -80,9 +65,6 @@ class EditorFileManager(private val context: Context) {
         }
     }
 
-    /**
-     * Writes text content to a file (Save / Save All).
-     */
     suspend fun writeFile(fileUri: Uri, content: String): Boolean = withContext(Dispatchers.IO) {
         try {
             context.contentResolver.openOutputStream(fileUri, "rwt")?.use { outputStream ->
@@ -94,10 +76,6 @@ class EditorFileManager(private val context: Context) {
         }
     }
 
-    /**
-     * Creates a new file or folder inside a parent directory.
-     * Uses "application/octet-stream" for files to prevent the system from appending unwanted extensions.
-     */
     suspend fun createItem(parentTreeUri: Uri, parentUri: Uri, name: String, isDir: Boolean): Uri? = withContext(Dispatchers.IO) {
         try {
             val parentDocId = if (DocumentsContract.isTreeUri(parentUri)) {
@@ -113,9 +91,6 @@ class EditorFileManager(private val context: Context) {
         }
     }
 
-    /**
-     * Renames an existing file or folder.
-     */
     suspend fun renameItem(treeUri: Uri, itemUri: Uri, newName: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val docId = if (DocumentsContract.isTreeUri(itemUri)) {
@@ -131,9 +106,6 @@ class EditorFileManager(private val context: Context) {
         }
     }
 
-    /**
-     * Checks if a file/folder with the given name already exists in the parent directory.
-     */
     suspend fun itemExists(parentUri: Uri, name: String): Boolean = withContext(Dispatchers.IO) {
         val children = listFiles(parentUri)
         children.any { it.name == name }
