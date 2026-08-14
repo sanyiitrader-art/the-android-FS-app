@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -37,7 +39,7 @@ fun EditorScreen(
     onOpenFolderClick: () -> Unit,
     onNewWorkspace: (Boolean) -> Unit,
     onBackToAI: () -> Unit,
-    onOpenExplorer: () -> Unit // New: Trigger for left sidebar
+    onOpenExplorer: () -> Unit
 ) {
     val workspaceUri by viewModel.workspaceUri.collectAsStateWithLifecycle()
     val currentText by viewModel.currentText.collectAsStateWithLifecycle()
@@ -63,16 +65,16 @@ fun EditorScreen(
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left Document Icon to open Explorer
                     IconButton(onClick = onOpenExplorer) {
                         Icon(Icons.Filled.Description, "Explorer", tint = MaterialTheme.colorScheme.primary)
                     }
                     
-                    IconButton(onClick = { viewModel.navigateBack() }, enabled = canGoBack.value.isNotEmpty()) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = if (canGoBack.value.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                    // Removed .value because 'by' collectAsStateWithLifecycle already unwraps it
+                    IconButton(onClick = { viewModel.navigateBack() }, enabled = canGoBack.isNotEmpty()) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = if (canGoBack.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                     }
-                    IconButton(onClick = { viewModel.navigateForward() }, enabled = canGoForward.value.isNotEmpty()) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Forward", tint = if (canGoForward.value.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                    IconButton(onClick = { viewModel.navigateForward() }, enabled = canGoForward.isNotEmpty()) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Forward", tint = if (canGoForward.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                     }
 
                     OutlinedTextField(
@@ -120,7 +122,6 @@ fun EditorScreen(
                     }
                 }
 
-                // Search Mode Toggle & Results
                 if (searchQuery.isEmpty()) {
                     TextButton(onClick = { viewModel.setTextSearchMode(!isTextSearchMode) }, modifier = Modifier.padding(start = 72.dp, bottom = 4.dp)) {
                         Text(if (isTextSearchMode) "Switch to File Search" else "Search Text", color = MaterialTheme.colorScheme.primary)
@@ -143,7 +144,6 @@ fun EditorScreen(
         }
     ) { padding ->
         if (workspaceUri == null) {
-            // Updated Start Screen to match reference image
             EditorStartScreen(
                 onNewFile = { onNewWorkspace(true) },
                 onOpenFile = onOpenFileClick,
@@ -212,7 +212,6 @@ fun EditorStartScreen(
     onOpenFile: () -> Unit,
     onOpenFolder: () -> Unit
 ) {
-    // Exact layout matching the reference image
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)

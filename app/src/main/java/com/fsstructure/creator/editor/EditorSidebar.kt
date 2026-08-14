@@ -3,7 +3,7 @@ package com.fsstructure.creator.editor
 import android.net.Uri
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -11,9 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -27,19 +24,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-// Helper data class for flattened tree rendering
 data class FlatItem(
     val item: EditorFileManager.EditorItem,
     val level: Int,
     val isExpanded: Boolean
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EditorSidebar(
     workspaceUri: Uri?,
@@ -55,14 +49,12 @@ fun EditorSidebar(
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var refreshKey by remember { mutableStateOf(0) }
 
-    // Inline creation/rename state
     var creatingParentUri by remember { mutableStateOf<Uri?>(null) }
     var isCreatingDir by remember { mutableStateOf(false) }
     var renamingItem by remember { mutableStateOf<EditorFileManager.EditorItem?>(null) }
     var isError by remember { mutableStateOf(false) }
     val shakeOffset = remember { Animatable(0f) }
 
-    // Fetch and flatten tree
     val treeItems by produceState(initialValue = emptyList<FlatItem>(), key1 = workspaceUri, key2 = expandedUris, key3 = refreshKey) {
         value = emptyList()
         if (workspaceUri != null) {
@@ -109,14 +101,13 @@ fun EditorSidebar(
             Text("Explorer", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
             Row {
                 IconButton(onClick = {
-                    // Determine parent folder
                     val targetParent = treeItems.find { it.item.uri == selectedUri }?.let { selected ->
-                        if (selected.item.isDir) selected.item.uri else workspaceUri // simplified: fallback to root if parent isn't easily resolvable
+                        if (selected.item.isDir) selected.item.uri else workspaceUri
                     } ?: workspaceUri
                     
-                    if (targetParent != null) {
-                        expandedUris = expandedUris + targetParent
-                        creatingParentUri = targetParent
+                    targetParent?.let { uri ->
+                        expandedUris = expandedUris + uri
+                        creatingParentUri = uri
                         isCreatingDir = true
                     }
                 }) {
@@ -127,9 +118,9 @@ fun EditorSidebar(
                         if (selected.item.isDir) selected.item.uri else workspaceUri
                     } ?: workspaceUri
                     
-                    if (targetParent != null) {
-                        expandedUris = expandedUris + targetParent
-                        creatingParentUri = targetParent
+                    targetParent?.let { uri ->
+                        expandedUris = expandedUris + uri
+                        creatingParentUri = uri
                         isCreatingDir = false
                     }
                 }) {
@@ -185,19 +176,20 @@ fun EditorSidebar(
                     Text(flatItem.item.name, color = MaterialTheme.colorScheme.onSurface)
                 }
 
-                // Inline Creation Field
                 if (creatingParentUri == flatItem.item.uri && flatItem.item.isDir && flatItem.isExpanded) {
                     InlineEditorField(
                         isDir = isCreatingDir,
                         isError = isError,
                         shakeOffset = shakeOffset.value,
                         onSave = { name ->
-                            viewModel.createItem(creatingParentUri!!, name, isCreatingDir) { success ->
-                                if (success) {
-                                    creatingParentUri = null
-                                    refreshKey++
-                                } else {
-                                    triggerError()
+                            creatingParentUri?.let { pUri ->
+                                viewModel.createItem(pUri, name, isCreatingDir) { success ->
+                                    if (success) {
+                                        creatingParentUri = null
+                                        refreshKey++
+                                    } else {
+                                        triggerError()
+                                    }
                                 }
                             }
                         },
@@ -206,7 +198,6 @@ fun EditorSidebar(
                 }
             }
 
-            // Creation field at root level
             if (creatingParentUri == workspaceUri && workspaceUri != null) {
                 item {
                     InlineEditorField(
@@ -214,12 +205,14 @@ fun EditorSidebar(
                         isError = isError,
                         shakeOffset = shakeOffset.value,
                         onSave = { name ->
-                            viewModel.createItem(workspaceUri, name, isCreatingDir) { success ->
-                                if (success) {
-                                    creatingParentUri = null
-                                    refreshKey++
-                                } else {
-                                    triggerError()
+                            workspaceUri?.let { wsUri ->
+                                viewModel.createItem(wsUri, name, isCreatingDir) { success ->
+                                    if (success) {
+                                        creatingParentUri = null
+                                        refreshKey++
+                                    } else {
+                                        triggerError()
+                                    }
                                 }
                             }
                         },
@@ -264,8 +257,8 @@ fun InlineEditorField(
                 focusedBorderColor = if (isError) Color.Red else MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = if (isError) Color.Red else MaterialTheme.colorScheme.surfaceVariant
             ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = {
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
                 if (text.isNotBlank()) onSave(text)
             })
         )

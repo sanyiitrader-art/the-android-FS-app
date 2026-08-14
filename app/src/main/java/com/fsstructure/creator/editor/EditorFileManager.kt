@@ -1,6 +1,7 @@
 package com.fsstructure.creator.editor
 
 import android.content.Context
+import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
@@ -46,7 +47,7 @@ class EditorFileManager(private val context: Context) {
                 Document.COLUMN_MIME_TYPE
             )
             
-            resolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            resolver.query(childrenUri, projection, null, null, null)?.use { cursor: Cursor ->
                 while (cursor.moveToNext()) {
                     val docId = cursor.getString(0)
                     val name = cursor.getString(1)
