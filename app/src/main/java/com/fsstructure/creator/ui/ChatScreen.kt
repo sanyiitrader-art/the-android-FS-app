@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,8 +23,7 @@ import com.fsstructure.creator.data.Message
 fun ChatScreen(
     viewModel: ChatViewModel,
     onMenuClick: () -> Unit,
-    onAttachClick: () -> Unit,
-    onOpenEditor: () -> Unit // New: Trigger to open the text editor
+    onAttachClick: () -> Unit
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
@@ -60,10 +58,6 @@ fun ChatScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f).padding(start = 8.dp)
                 )
-                // Top-Right Document Icon to open Editor
-                IconButton(onClick = onOpenEditor) {
-                    Icon(Icons.Filled.Description, contentDescription = "Open Editor", tint = MaterialTheme.colorScheme.primary)
-                }
             }
         },
         bottomBar = {

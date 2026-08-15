@@ -1,5 +1,6 @@
 package com.fsstructure.creator
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,7 +9,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -20,16 +20,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.fsstructure.creator.editor.EditorScreen
-import com.fsstructure.creator.editor.EditorSidebar
-import com.fsstructure.creator.editor.EditorViewModel
-import com.fsstructure.creator.editor.EditorFileManager
 import com.fsstructure.creator.ui.ChatScreen
 import com.fsstructure.creator.ui.FSAppTheme
 import com.fsstructure.creator.ui.Sidebar
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableFloatStateOf
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,28 +39,28 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainAppContent() {
-    val chatViewModel: ChatViewModel = viewModel()
-    val editorViewModel: EditorViewModel = viewModel()
+    val viewModel: ChatViewModel = viewModel()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var isEditorOpen by remember { mutableStateOf(false) }
-    
-    val isChatSidebarOpen by chatViewModel.isSidebarOpen.collectAsStateWithLifecycle()
-    var isEditorSidebarOpen by remember { mutableStateOf(false) }
+    val isSidebarOpen by viewModel.isSidebarOpen.collectAsStateWithLifecycle()
+    val folderUri by viewModel.folderUri.collectAsStateWithLifecycle()
+    val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
 
-    val apiKey by chatViewModel.apiKey.collectAsStateWithLifecycle()
     var showApiDialog by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
 
-    // Chat Pickers
-    val chatFolderPickerLauncher = rememberLauncherForActivityResult(
+    // Folder Picker Launcher (SAF)
+    val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
-        if (uri != null) chatViewModel.saveFolderUri(uri)
+        if (uri != null) {
+            viewModel.saveFolderUri(uri)
+        }
     }
 
-    val chatFilePickerLauncher = rememberLauncherForActivityResult(
+    // File Attachment Launcher (.txt, .md)
+    val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
@@ -74,164 +69,76 @@ fun MainAppContent() {
                     val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                     val fileName = uri.lastPathSegment ?: "attached_file"
                     if (content != null) {
-                        chatViewModel.sendMessage("I have attached a file named '$fileName'. Please read its contents and let me know when you are ready to create the structure based on it.", content)
+                        viewModel.sendMessage("I have attached a file named '$fileName'. Please read its contents and let me know when you are ready to create the structure based on it.", content)
                     }
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                    // Silently fail or log, per lightweight requirements
+                }
             }
         }
     }
 
-    // Editor Pickers
-    val editorFilePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            val item = EditorFileManager.EditorItem(
-                name = uri.lastPathSegment ?: "file",
-                uri = uri,
-                isDir = false
-            )
-            editorViewModel.openFile(item)
-        }
-    }
-
-    val editorFolderPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            editorViewModel.setWorkspace(uri)
-        }
-    }
-
-    val chatSidebarWidth = 320.dp
-    val chatSidebarX by animateDpAsState(
-        targetValue = if (isChatSidebarOpen) 0.dp else -chatSidebarWidth,
-        label = "ChatSidebarAnimation"
-    )
-
-    val editorSidebarWidth = 360.dp
-    val editorSidebarX by animateDpAsState(
-        targetValue = if (isEditorSidebarOpen) 0.dp else -editorSidebarWidth,
-        label = "EditorSidebarAnimation"
+    // Animate sidebar sliding
+    val sidebarWidth = 320.dp
+    val sidebarX by animateDpAsState(
+        targetValue = if (isSidebarOpen) 0.dp else -sidebarWidth,
+        label = "SidebarAnimation"
     )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        if (isEditorOpen) {
-                            if (dragOffset > 100) isEditorOpen = false
-                            if (dragOffset < -100) isEditorSidebarOpen = true
-                        } else {
-                            if (dragOffset > 100 && !isChatSidebarOpen) chatViewModel.toggleSidebar()
-                            if (dragOffset < -100) isEditorOpen = true
-                        }
-                        dragOffset = 0f
-                    },
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        dragOffset += dragAmount
-                    }
-                )
-            }
     ) {
-        if (isEditorOpen) {
-            // --- EDITOR UI ---
-            EditorScreen(
-                viewModel = editorViewModel,
-                onOpenFileClick = { editorFilePickerLauncher.launch(arrayOf("*/*")) },
-                onOpenFolderClick = { editorFolderPickerLauncher.launch(null) },
-                onNewWorkspace = { isFile ->
-                    val baseDir = context.getExternalFilesDir(null)
-                    var newFolder = File(baseDir, "new folder")
-                    var i = 2
-                    while (newFolder.exists()) {
-                        newFolder = File(baseDir, "new folder ($i)")
-                        i++
+        // Main Chat Screen
+        ChatScreen(
+            viewModel = viewModel,
+            onMenuClick = { viewModel.toggleSidebar() },
+            onAttachClick = {
+                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown"))
+            }
+        )
+
+        // Overlay to catch clicks on the exposed chat area when sidebar is open
+        if (isSidebarOpen) {
+            Spacer(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { viewModel.closeSidebar() }
+                        )
                     }
-                    newFolder.mkdirs()
-                    val wsUri = Uri.fromFile(newFolder)
-                    editorViewModel.setWorkspace(wsUri)
-                    // Trigger the sidebar naming box automatically
-                    editorViewModel.triggerCreation(wsUri, !isFile)
-                    isEditorSidebarOpen = true
-                },
-                onBackToAI = { isEditorOpen = false },
-                onOpenExplorer = { isEditorSidebarOpen = true }
             )
+        }
 
-            // Editor Sidebar Overlay
-            if (isEditorSidebarOpen) {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = { isEditorSidebarOpen = false })
-                        }
-                )
-            }
-
-            // Editor Sidebar
-            Box(
-                modifier = Modifier
-                    .offset(x = editorSidebarX)
-                    .width(editorSidebarWidth)
-                    .fillMaxHeight()
-            ) {
-                val wsUri by editorViewModel.workspaceUri.collectAsStateWithLifecycle()
-                EditorSidebar(
-                    workspaceUri = wsUri,
-                    onClose = { isEditorSidebarOpen = false },
-                    onFileOpen = { editorViewModel.openFile(it); isEditorSidebarOpen = false },
-                    viewModel = editorViewModel
-                )
-            }
-        } else {
-            // --- CHAT UI ---
-            ChatScreen(
-                viewModel = chatViewModel,
-                onMenuClick = { chatViewModel.toggleSidebar() },
-                onAttachClick = { chatFilePickerLauncher.launch(arrayOf("text/plain", "text/markdown")) },
-                onOpenEditor = { isEditorOpen = true }
+        // Sidebar
+        Box(
+            modifier = Modifier
+                .offset(x = sidebarX)
+                .width(sidebarWidth)
+                .fillMaxHeight()
+        ) {
+            Sidebar(
+                viewModel = viewModel,
+                onClose = { viewModel.closeSidebar() },
+                onEditApiClick = { showApiDialog = true },
+                onPickFolderClick = {
+                    folderPickerLauncher.launch(null)
+                }
             )
-
-            // Chat Sidebar Overlay
-            if (isChatSidebarOpen) {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = { chatViewModel.closeSidebar() })
-                        }
-                )
-            }
-
-            // Chat Sidebar
-            Box(
-                modifier = Modifier
-                    .offset(x = chatSidebarX)
-                    .width(chatSidebarWidth)
-                    .fillMaxHeight()
-            ) {
-                Sidebar(
-                    viewModel = chatViewModel,
-                    onClose = { chatViewModel.closeSidebar() },
-                    onEditApiClick = { showApiDialog = true },
-                    onPickFolderClick = { chatFolderPickerLauncher.launch(null) }
-                )
-            }
         }
     }
 
+    // API Key Edit Dialog
     if (showApiDialog) {
         EditApiDialog(
             currentKey = apiKey ?: "",
-            onSave = { newKey -> chatViewModel.saveApiKey(newKey); showApiDialog = false },
+            onSave = { newKey ->
+                viewModel.saveApiKey(newKey)
+                showApiDialog = false
+            },
             onDismiss = { showApiDialog = false }
         )
     }
@@ -259,10 +166,16 @@ fun EditApiDialog(
             )
         },
         confirmButton = {
-            Button(onClick = { if (keyText.isNotBlank()) onSave(keyText) }) { Text("Save") }
+            Button(
+                onClick = { if (keyText.isNotBlank()) onSave(keyText) }
+            ) {
+                Text("Save")
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
     )
 }

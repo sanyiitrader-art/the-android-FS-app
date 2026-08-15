@@ -23,7 +23,9 @@ class AIApi {
 
     companion object {
         private const val API_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-        private const val MODEL = "gemini-3.5-flash"
+        
+        // Updated to exactly the model you requested
+        private const val MODEL = "gemini-3.5-flash-lite"
 
         private val SYSTEM_PROMPT = """
             You are the FS Structure Creator, an AI-powered filesystem structure creation assistant.
@@ -136,7 +138,6 @@ class AIApi {
         jsonString = jsonString.trim()
 
         val operations = mutableListOf<FsOperation>()
-        // Changed to var because it is assigned in try/catch blocks
         var message: String
 
         try {

@@ -92,10 +92,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    
-    // Material Icons Extended (Required for Editor UI icons like Folder, Description, NoteAdd)
-    // R8 strips unused icons in release builds to keep it lightweight.
-    implementation("androidx.compose.material:material-icons-extended")
 
     // Navigation (Lightweight)
     implementation("androidx.navigation:navigation-compose:2.7.7")
